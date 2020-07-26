@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/switchId"
+        app:showAsAction="never"
+        android:title="Voice Enabled= OFF">
+    </item>
+    <item
+        android:id="@+id/commands"
+        app:showAsAction="never"
+        android:title="Commands">
+    </item>
+</menu>
