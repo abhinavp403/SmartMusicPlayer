@@ -4,7 +4,10 @@ import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.*
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.IBinder
 import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -33,41 +36,41 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
     private lateinit var playpauseBtn: ImageView
     private lateinit var nextBtn: ImageView
     private lateinit var previousBtn: ImageView
+    private lateinit var loopBtn: ImageView
+    private lateinit var shuffleBtn: ImageView
     private lateinit var songNameText: TextView
     private lateinit var artistNameText: TextView
     private lateinit var elapsedTimeText: TextView
     private lateinit var remainingTimeText: TextView
     private lateinit var imageView: ImageView
-    private var mode:String = "OFF"
-    private var totalTime: Int = 0
-
-    private lateinit var preferences: SharedPreferences
-    private lateinit var editor: SharedPreferences.Editor
 
     private var musicSrv: MusicService? = null
     private var playIntent: Intent? = null
+    private var totalTime: Int = 0
     private var musicBound = false
     private var paused = false
     private var playbackPaused = false
+    private var isLoop = false
+    private lateinit var globalVariable: GlobalClass
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_smartplayer)
 
-        preferences = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-        editor = preferences.edit()
-
         checkVoiceCommandPermission()
+        globalVariable = this.applicationContext as GlobalClass
 
         playpauseBtn = findViewById(R.id.playpausebtn)
-        playpauseBtn.setImageResource(R.drawable.ic_pause_black_24dp)
         nextBtn = findViewById(R.id.nextbtn)
         previousBtn = findViewById(R.id.previousbtn)
+        shuffleBtn = findViewById(R.id.shufflebtn)
+        loopBtn = findViewById(R.id.loopbtn)
         songNameText = findViewById(R.id.songname)
         artistNameText = findViewById(R.id.artistname)
         elapsedTimeText = findViewById(R.id.elapsedTimeLabel)
         remainingTimeText = findViewById(R.id.remainingTimeLabel)
         imageView = findViewById(R.id.logo)
+        setInitialResources()
 
         lowerRelativeLayout = findViewById(R.id.lower)
         parentRelativeLayout = findViewById(R.id.parentRelativeLayout)
@@ -79,52 +82,66 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
         setController()
         validateReceivedValues()
 
+        if (globalVariable.mode == "OFF") {
+            lowerRelativeLayout.visibility = View.VISIBLE
+            parentRelativeLayout.setOnClickListener(null)
+        } else {
+            lowerRelativeLayout.visibility = View.INVISIBLE
+            parentRelativeLayout.setOnTouchListener(View.OnTouchListener { view, motionEvent ->
+                when (motionEvent.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        speechRecognizer.startListening(speechRecognizerIntent)
+                        keeper = ""
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        speechRecognizer.stopListening()
+                    }
+                }
+                return@OnTouchListener false
+            })
+        }
+
         speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle) {
-            }
+            override fun onReadyForSpeech(params: Bundle) {}
 
-            override fun onBeginningOfSpeech() {
-            }
+            override fun onBeginningOfSpeech() {}
 
-            override fun onRmsChanged(rmsdB: Float) {
-            }
+            override fun onRmsChanged(rmsdB: Float) {}
 
-            override fun onBufferReceived(buffer: ByteArray) {
-            }
+            override fun onBufferReceived(buffer: ByteArray) {}
 
-            override fun onEndOfSpeech() {
-            }
+            override fun onEndOfSpeech() {}
 
-            override fun onError(error: Int) {
-            }
+            override fun onError(error: Int) {}
 
             override fun onResults(results: Bundle) {
                 val matchesFound: ArrayList<String>? = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (matchesFound != null) {
-                    if (mode == "ON") {
+                    if (globalVariable.mode == "ON") {
                         keeper = matchesFound[0]
-                        if (keeper == "pause" || keeper == "pause the song") {
+                        Toast.makeText(this@SmartPlayerActivity, "Command = $keeper", Toast.LENGTH_LONG).show()
+                        if (keeper.equals("pause", ignoreCase = true) || keeper.equals("pause song", ignoreCase = true)) {
                             pause()
-                            Toast.makeText(this@SmartPlayerActivity, "Command = $keeper", Toast.LENGTH_LONG).show()
-                        } else if (keeper == "play" || keeper == "play the song") {
+                        } else if (keeper.equals("play", ignoreCase = true) || keeper.equals("play song", ignoreCase = true)) {
                             start()
-                            Toast.makeText(this@SmartPlayerActivity, "Command = $keeper", Toast.LENGTH_LONG).show()
-                        } else if (keeper == "next" || keeper == "play next song") {
+                        } else if (keeper.equals("next", ignoreCase = true) || keeper.equals("play next song", ignoreCase = true)) {
                             playNext()
-                            Toast.makeText(this@SmartPlayerActivity, "Command = $keeper", Toast.LENGTH_LONG).show()
-                        } else if (keeper == "previous" || keeper == "play previous song") {
+                        } else if (keeper.equals("previous", ignoreCase = true) || keeper.equals("play previous song", ignoreCase = true)) {
                             playPrev()
-                            Toast.makeText(this@SmartPlayerActivity, "Command = $keeper", Toast.LENGTH_LONG).show()
+                        } else if (keeper.equals("loop", ignoreCase = true) || keeper.equals("play in loop", ignoreCase = true)) {
+                            isLoop = !isLoop
+                            loop()
+                        } else if (keeper.equals("shuffle", ignoreCase = true) || keeper.equals("shuffle playlist", ignoreCase = true)) {
+                            globalVariable.isShuffle = !globalVariable.isShuffle
+                            shuffle()
                         }
                     }
                 }
             }
 
-            override fun onPartialResults(partialResults: Bundle) {
-            }
+            override fun onPartialResults(partialResults: Bundle) {}
 
-            override fun onEvent(eventType: Int, params: Bundle) {
-            }
+            override fun onEvent(eventType: Int, params: Bundle) {}
         })
 
         positionBar.max = totalTime
@@ -142,6 +159,13 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
             }
         }
         )
+    }
+
+    private fun setInitialResources() {
+        playpauseBtn.setImageResource(R.drawable.ic_pause_black_24dp)
+        if(globalVariable.isShuffle) {
+            shuffleBtn.setBackgroundResource(R.drawable.ic_baseline_shuffle_24_on)
+        }
     }
 
     override fun onStart() {
@@ -183,20 +207,22 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
         return true
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        val item = menu.findItem(R.id.switchId)
+        item.title = "Voice Enabled = " + globalVariable.mode
+        return super.onPrepareOptionsMenu(menu)
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if(item.itemId == R.id.switchId) {
-            val itemOne = preferences.getString("val", "Voice Enabled = OFF")
-            val itemMode = preferences.getString("mode", "OFF")
-            if (mode == "ON") {
-                mode = "OFF"
-                item.title = "Voice Enabled = OFF"
+            if (globalVariable.mode == "ON") {
+                globalVariable.mode = "OFF"
+                item.title = "Voice Enabled = " + globalVariable.mode
                 lowerRelativeLayout.visibility = View.VISIBLE
                 parentRelativeLayout.setOnClickListener(null)
-                editor.putString("val", item.title as String)
-                editor.putString("mode", mode)
             } else {
-                mode = "ON"
-                item.title = "Voice Enabled = ON"
+                globalVariable.mode = "ON"
+                item.title = "Voice Enabled = " + globalVariable.mode
                 lowerRelativeLayout.visibility = View.INVISIBLE
                 parentRelativeLayout.setOnTouchListener(View.OnTouchListener { view, motionEvent ->
                     when (motionEvent.action) {
@@ -210,10 +236,7 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
                     }
                     return@OnTouchListener false
                 })
-                editor.putString("val", item.title as String)
-                editor.putString("mode", mode)
             }
-            editor.clear().apply()
             return true
         }
         if(item.itemId == R.id.commands) {
@@ -243,8 +266,12 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
         val duration = intent.getIntExtra("duration", 0)
 
         songNameText.text = title
+        songNameText.setHorizontallyScrolling(true)
+        songNameText.isSelected = true
         artistNameText.text = artist
         totalTime = duration
+        val remainingTime = createTimeLabel(totalTime)
+        remainingTimeLabel.text = "-$remainingTime"
 
         thread()
     }
@@ -271,7 +298,7 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
     }
 
     private fun checkVoiceCommandPermission() {
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:  $packageName"))
                 startActivity(intent)
@@ -291,6 +318,14 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
         nextBtn.setOnClickListener {
                 playNext()
         }
+        shuffleBtn.setOnClickListener {
+            globalVariable.isShuffle = !globalVariable.isShuffle
+            shuffle()
+        }
+        loopBtn.setOnClickListener {
+            isLoop = !isLoop
+            loop()
+        }
     }
 
     private fun playNext() {
@@ -301,6 +336,29 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
     private fun playPrev() {
         musicSrv!!.playPrev()
         setNextPrevScreen()
+    }
+
+    private fun shuffle() {
+        if(globalVariable.isShuffle) {
+            shuffleBtn.setBackgroundResource(R.drawable.ic_baseline_shuffle_24_on)
+            musicSrv!!.setShuffle(globalVariable.isShuffle)
+        }
+        else {
+            shuffleBtn.setBackgroundResource(R.drawable.ic_baseline_shuffle_24)
+            musicSrv!!.setShuffle(globalVariable.isShuffle)
+        }
+        setNextPrevScreen()
+    }
+
+    private fun loop() {
+        if(isLoop) {
+            loopBtn.setBackgroundResource(R.drawable.ic_baseline_loop_24_on)
+            musicSrv!!.setLoop(isLoop)
+        }
+        else {
+            loopBtn.setBackgroundResource(R.drawable.ic_baseline_loop_24)
+            musicSrv!!.setLoop(isLoop)
+        }
     }
 
     override fun isPlaying(): Boolean {
@@ -337,7 +395,7 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
     }
 
     override fun getBufferPercentage(): Int {
-        TODO("Not yet implemented")
+        return (musicSrv!!.getSeek()*100) / musicSrv!!.getDuration()
     }
 
     override fun getCurrentPosition(): Int {
@@ -352,7 +410,7 @@ class SmartPlayerActivity : AppCompatActivity(), MediaController.MediaPlayerCont
     }
 
     override fun getAudioSessionId(): Int {
-        TODO("Not yet implemented")
+        return 0
     }
 
     override fun canPause(): Boolean {

@@ -4,7 +4,7 @@
     <item
         android:id="@+id/switchId"
         app:showAsAction="never"
-        android:title="Voice Enabled= OFF">
+        android:title="Voice Enabled = OFF">
     </item>
     <item
         android:id="@+id/commands"

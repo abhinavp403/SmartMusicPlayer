@@ -1,22 +1,24 @@
 package com.dev.abhinav.smartmusicplayer
 
-import android.app.Notification
-import android.app.PendingIntent
-import android.app.Service
+import android.app.*
 import android.content.ContentUris
+import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.MediaPlayer.OnCompletionListener
 import android.media.MediaPlayer.OnPreparedListener
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.MediaStore
 import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
 import java.util.*
 
-class MusicService : Service(), OnPreparedListener, MediaPlayer.OnErrorListener, OnCompletionListener {
+class MusicService : Service(), OnPreparedListener, MediaPlayer.OnErrorListener, OnCompletionListener{
     private var player: MediaPlayer? = null
     private var songs: ArrayList<Song>? = null
     private var pos = 0
@@ -28,17 +30,15 @@ class MusicService : Service(), OnPreparedListener, MediaPlayer.OnErrorListener,
     private var shuffle = false
     private var rand: Random? = null
     private var serviceCallbacks: ServiceCallbacks? = null
+    val NOTIFICATION_CHANNEL_ID_SERVICE = "com.dev.abhinav.smartmusicplayer"
 
     override fun onCreate() {
         super.onCreate()
         pos = 0
         player = MediaPlayer()
         initMusicPlayer()
+        initChannel()
         rand = Random()
-    }
-
-    override fun onDestroy() {
-        stopForeground(true)
     }
 
     private fun initMusicPlayer() {
@@ -47,6 +47,13 @@ class MusicService : Service(), OnPreparedListener, MediaPlayer.OnErrorListener,
         player!!.setOnPreparedListener(this)
         player!!.setOnCompletionListener(this)
         player!!.setOnErrorListener(this)
+    }
+
+    private fun initChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(NotificationChannel(NOTIFICATION_CHANNEL_ID_SERVICE, "App Service", NotificationManager.IMPORTANCE_DEFAULT))
+        }
     }
 
     fun setList(theSongs: ArrayList<Song>?) {
@@ -103,21 +110,25 @@ class MusicService : Service(), OnPreparedListener, MediaPlayer.OnErrorListener,
         return false
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onPrepared(mediaPlayer: MediaPlayer) {
         mediaPlayer.start()
+
         val intent = Intent(this, MainActivity::class.java)
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pendInt = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
-        val builder = Notification.Builder(this)
+        val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID_SERVICE)
 
-//        builder.setContentIntent(pendInt)
-//            .setSmallIcon(R.drawable.ic_play_arrow_black_24dp)
-//            .setTicker(songTitle)
-//            .setOngoing(true)
-//            .setContentTitle("Playing")
-//        .setContentText(songTitle)
-//        val notification = builder.build()
-//        startForeground(NOTIFY_ID, notification)
+        builder.setContentIntent(pendInt)
+            .setSmallIcon(R.drawable.ic_play_arrow_black_24dp)
+            .setTicker(songTitle)
+            .setOngoing(true)
+            .setContentTitle("Playing")
+            .setContentText(songTitle)
+            .setSound(null)
+            .setOnlyAlertOnce(true)
+        val notification = builder.build()
+        startForeground(NOTIFY_ID, notification)
     }
 
     fun getSeek(): Int {
@@ -168,28 +179,30 @@ class MusicService : Service(), OnPreparedListener, MediaPlayer.OnErrorListener,
     }
 
     fun playNext() {
-        pos++
-        if(pos >= songs!!.size)
+        if(shuffle) {
+            var newSong = pos
+            while(newSong == pos){
+                newSong = rand!!.nextInt(songs!!.size)
+            }
+            pos = newSong
+        }
+        else {
+            pos++
+            if (pos >= songs!!.size)
             pos = 0
+        }
         playSong()
-
-        //For Shuffle
-//        if(shuffle) {
-//            var newSong = pos
-//            while(newSong == pos){
-//                newSong = rand!!.nextInt(songs!!.size);
-//            }
-//            pos = newSong
-//        }
-//        else{
-//            pos++
-//            (pos >= songs!!.size)
-//            pos = 0
-//        }
-//        playSong()
     }
 
-    fun setShuffle() {
-        shuffle = if (shuffle) false else true
+    fun setShuffle(shuf: Boolean) {
+        shuffle = shuf
+    }
+
+    fun setLoop(loop: Boolean) {
+        player!!.isLooping = loop
+    }
+
+    override fun onDestroy() {
+        stopForeground(true)
     }
 }

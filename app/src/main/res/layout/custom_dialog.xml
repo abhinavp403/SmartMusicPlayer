@@ -10,30 +10,30 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:id="@+id/title"
-        android:textSize="26sp"
+        android:textSize="24sp"
         android:textColor="@android:color/black"
         android:text="Voice Commands" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:textColor="@android:color/black"
         android:textSize="16sp"
-        android:text='Play- "Play the song"/ "Play"' />
+        android:text='Play- "Play song"/ "Play"' />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:textColor="@android:color/black"
         android:textSize="16sp"
-        android:text='Pause- "Pause the song"/ "Pause"' />
+        android:text='Pause- "Pause song"/ "Pause"' />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:textColor="@android:color/black"
         android:textSize="16sp"
         android:text='Next- "Play next song"/ "Next"' />
@@ -41,10 +41,26 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:textColor="@android:color/black"
         android:textSize="16sp"
         android:text='Previous- "Play previous song"/ "Previous"' />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="@android:color/black"
+        android:textSize="16sp"
+        android:text='Loop- "Play in loop"/ "Loop"' />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="@android:color/black"
+        android:textSize="16sp"
+        android:text='Shuffle- "Shuffle playlist"/ "Shuffle"' />
 
     <TextView
         android:layout_width="match_parent"
@@ -60,7 +76,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="end"
-        android:layout_marginTop="30dp">
+        android:layout_marginTop="25dp">
 
         <TextView
             android:id="@+id/ok_button"

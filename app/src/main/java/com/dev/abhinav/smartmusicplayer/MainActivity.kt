@@ -1,17 +1,20 @@
 package com.dev.abhinav.smartmusicplayer
 
 import android.Manifest
-import android.content.*
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.MediaStore
-import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.ListView
+import android.widget.MediaController
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.afollestad.materialdialogs.MaterialDialog
@@ -26,26 +29,28 @@ import com.karumi.dexter.listener.single.PermissionListener
 import java.util.*
 import kotlin.collections.ArrayList
 
-open class MainActivity : AppCompatActivity() {
+open class MainActivity : AppCompatActivity(), MediaController.MediaPlayerControl {
     private lateinit var songList: ArrayList<Song>
     private lateinit var songView: ListView
-    private var mode:String = "OFF"
-    private lateinit var preferences: SharedPreferences
-    private lateinit var editor: SharedPreferences.Editor
     private var musicSrv: MusicService? = null
     private var playIntent: Intent? = null
     private var musicBound = false
+    private lateinit var controller: MediaController
+    private var paused = false
+    private var playbackPaused = false
+    private lateinit var globalVariable: GlobalClass
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        preferences = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-        editor = preferences.edit()
+        globalVariable = this.applicationContext as GlobalClass
         songList = ArrayList()
         songView = findViewById(R.id.songList)
 
         appExternalStoragePermission()
+        controller = MusicController(this)
+        setController()
     }
 
     override fun onStart() {
@@ -60,33 +65,47 @@ open class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         stopService(playIntent)
         musicSrv = null
-        editor.clear().commit()
         super.onDestroy()
     }
 
-    /*override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+    override fun onPause() {
+        super.onPause()
+        paused = true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (paused) {
+            setController()
+            paused = false
+        }
+    }
+
+    override fun onStop() {
+        controller.hide()
+        super.onStop()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        val item = menu.findItem(R.id.switchId)
+        item.title = "Voice Enabled = " + globalVariable.mode
+        return super.onPrepareOptionsMenu(menu)
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if(item.itemId == R.id.switchId) {
-            item.title = preferences.getString("val", "Voice Enabled: OFF")
-            val itemOne = preferences.getString("val", "Voice Enabled: OFF")
-            val itemMode = preferences.getString("mode", "OFF")
-            Log.d("kkk1", itemMode)
-            if (itemMode == "ON") {
-                mode = "OFF"
-                item.title = itemOne
-                editor.putString("val", item.title as String)
-                editor.putString("mode", mode)
+            if (globalVariable.mode == "ON") {
+                globalVariable.mode = "OFF"
+                item.title = "Voice Enabled = " + globalVariable.mode
             } else {
-                mode = "ON"
-                item.title = "Voice Enabled = ON"
-                editor.putString("val", item.title as String)
-                editor.putString("mode", mode)
+                globalVariable.mode = "ON"
+                item.title = "Voice Enabled = " + globalVariable.mode
             }
-            editor.apply()
             return true
         }
         if(item.itemId == R.id.commands) {
@@ -98,7 +117,7 @@ open class MainActivity : AppCompatActivity() {
             return true
         }
         return super.onOptionsItemSelected(item)
-    }*/
+    }
 
     fun songPicked(view: View) {
         musicSrv!!.setSong(view.tag.toString().toInt())
@@ -108,6 +127,11 @@ open class MainActivity : AppCompatActivity() {
         intent.putExtra("artist", songList[view.tag.toString().toInt()].artist)
         intent.putExtra("duration", songList[view.tag.toString().toInt()].seconds)
         startActivity(intent)
+        if(playbackPaused) {
+            setController()
+            playbackPaused = false
+        }
+        controller.show(0)
     }
 
     private val musicConnection: ServiceConnection = object : ServiceConnection {
@@ -143,7 +167,7 @@ open class MainActivity : AppCompatActivity() {
     private fun displaySongNames() {
         val musicResolver = contentResolver
         val musicUri: Uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        val musicCursor: Cursor = musicResolver.query(musicUri, null, null, null, null)
+        val musicCursor: Cursor = musicResolver.query(musicUri, null, null, null, null)!!
         if (musicCursor.moveToFirst()) {
             val idColumn = musicCursor.getColumnIndex(MediaStore.Audio.Media._ID)
             val titleColumn = musicCursor.getColumnIndex(MediaStore.Audio.Media.TITLE)
@@ -177,5 +201,90 @@ open class MainActivity : AppCompatActivity() {
         if(sec < 10) timeLabel += "0"
         timeLabel += sec
         return timeLabel
+    }
+
+    private fun setController() {
+        controller.setPrevNextListeners({ playNext() }) { playPrev() }
+        controller.setMediaPlayer(this)
+        controller.setAnchorView(findViewById(R.id.songList))
+        controller.isEnabled = true
+    }
+
+    private fun playNext() {
+        musicSrv!!.playNext()
+        if(playbackPaused) {
+            setController()
+            playbackPaused = false
+        }
+        controller.show(0)
+    }
+
+    private fun playPrev() {
+        musicSrv!!.playPrev()
+        if(playbackPaused) {
+            setController()
+            playbackPaused = false
+        }
+        controller.show(0)
+    }
+
+    override fun isPlaying(): Boolean {
+        return if (musicSrv != null && musicBound)
+            musicSrv!!.isPng()
+        else
+            false
+    }
+
+    override fun canSeekForward(): Boolean {
+        return true
+    }
+
+    override fun getDuration(): Int {
+        return if (musicSrv != null && musicBound && musicSrv!!.isPng())
+            musicSrv!!.getDuration()
+        else
+            0
+    }
+
+    override fun pause() {
+        playbackPaused = true
+        musicSrv!!.pausePlayer()
+    }
+
+    override fun seekTo(pos: Int) {
+        musicSrv!!.seek(pos)
+    }
+
+    override fun start() {
+        musicSrv!!.go()
+    }
+
+    override fun getBufferPercentage(): Int {
+        return (musicSrv!!.getSeek()*100) / musicSrv!!.getDuration()
+    }
+
+    override fun getCurrentPosition(): Int {
+        return if (musicSrv != null && musicBound && !musicSrv!!.isPng())
+            musicSrv!!.getPos()
+        else
+            0
+    }
+
+    override fun canSeekBackward(): Boolean {
+        return true
+    }
+
+    override fun getAudioSessionId(): Int {
+        return 0
+    }
+
+    override fun canPause(): Boolean {
+        return true
+    }
+
+    override fun onBackPressed() {
+        super.onBackPressed()
+        stopService(playIntent)
+        musicSrv = null
     }
 }
