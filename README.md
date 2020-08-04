@@ -2,14 +2,16 @@
 
 Play Music using Voice Commands!
 
-Now you can control your music player using simple voice commands as well as your controller.
+Now you can control your music player using simple voice commands as well as your media controller.
 
-Check it out on playstore when it comes!
+Libraries used:
+1. Dexter for permissions
+2. Dialog Box
+3. Content Resolver for reading Audio files from Internal Storage
+4. Music Service
+5. Media Player to command music
+6. Media Controller for default controller
+7. Speech Recognizer
+8. Notification Builder
 
-Coding Aspects used:
-1) Dexter
-2) Dialog Box
-3) Content Resolver
-4) Music Service
-5) Media Player
-6) Speech Recognizer
+https://play.google.com/store/apps/details?id=com.dev.abhinav.smartmusicplayer
